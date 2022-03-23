@@ -3,9 +3,9 @@ pragma solidity 0.8.13;
 import "./BStorage.sol";
 import "./PoolToken.sol";
 import "./interfaces/IFactory.sol";
+import "./libraries/Errors.sol";
 
 contract BSetter is PoolToken, BStorage {
-
 	uint public constant RESERVE_FACTOR_MAX = 0.20e18; //20%
 	uint public constant KINK_UR_MIN = 0.50e18; //50%
 	uint public constant KINK_UR_MAX = 0.99e18; //99%
@@ -24,7 +24,7 @@ contract BSetter is PoolToken, BStorage {
 		address _underlying, 
 		address _collateral
 	) external {
-		require(msg.sender == factory, "Impermax: UNAUTHORIZED"); // sufficient check
+		_require(msg.sender == factory, Errors.UNAUTHORIZED_CALL); // sufficient check
 		_setName(_name, _symbol);
 		underlying = _underlying;
 		collateral = _collateral;
@@ -57,11 +57,11 @@ contract BSetter is PoolToken, BStorage {
 	
 	function _checkSetting(uint parameter, uint min, uint max) internal view {
 		_checkAdmin();
-		require(parameter >= min, "Impermax: INVALID_SETTING");
-		require(parameter <= max, "Impermax: INVALID_SETTING");
+		_require(parameter >= min, Errors.INVALID_SETTING);
+		_require(parameter <= max, Errors.INVALID_SETTING);
 	}
 	
 	function _checkAdmin() internal view {
-		require(msg.sender == IFactory(factory).admin(), "Impermax: UNAUTHORIZED");
+		_require(msg.sender == IFactory(factory).admin(), Errors.UNAUTHORIZED_CALL);
 	}
 }

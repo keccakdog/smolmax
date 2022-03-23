@@ -1,5 +1,6 @@
 pragma solidity 0.8.13;
 
+import "./libraries/Errors.sol";
 import "./BStorage.sol";
 import "./PoolToken.sol";
 
@@ -20,7 +21,7 @@ contract BAllowance is PoolToken, BStorage {
 	function _checkBorrowAllowance(address owner, address spender, uint256 value) internal {
 		uint _borrowAllowance = borrowAllowance[owner][spender];
 		if (spender != owner && _borrowAllowance != type(uint256).max) {
-			require(_borrowAllowance >= value, "Impermax: BORROW_NOT_ALLOWED");
+			_require(_borrowAllowance >= value, Errors.BORROW_NOT_ALLOWED);
 			borrowAllowance[owner][spender] = _borrowAllowance - value;
 		}	
 	}

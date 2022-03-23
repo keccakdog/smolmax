@@ -92,4 +92,13 @@ library Errors {
     uint256 internal constant INVALID_BORROWABLE = 9;
     uint256 internal constant INSUFFICIENT_SHORTFALL = 10;
     uint256 internal constant INSUFFICIENT_REDEEM_TOKENS = 11;
+
+    // Collateral/Borrowable setter
+    uint256 internal constant INVALID_SETTING = 12;
+
+    // Borrowable Allowance
+    uint256 internal constant BORROW_NOT_ALLOWED = 13;
+
+    // Borrowable Storage
+    uint256 internal constant SAFE112 = 14;
 }

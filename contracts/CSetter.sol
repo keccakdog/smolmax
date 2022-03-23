@@ -4,6 +4,7 @@ import "./CStorage.sol";
 import "./PoolToken.sol";
 import "./interfaces/IFactory.sol";
 import "./interfaces/ISimpleUniswapOracle.sol";
+import "./libraries/Errors.sol";
 
 contract CSetter is PoolToken, CStorage {
 
@@ -25,7 +26,7 @@ contract CSetter is PoolToken, CStorage {
 		address _borrowable0, 
 		address _borrowable1
 	) external {
-		require(msg.sender == factory, "Impermax: UNAUTHORIZED"); // sufficient check
+		_require(msg.sender == factory, Errors.UNAUTHORIZED_CALL); // sufficient check
 		_setName(_name, _symbol);
 		underlying = _underlying;
 		borrowable0 = _borrowable0;
@@ -53,11 +54,11 @@ contract CSetter is PoolToken, CStorage {
 	
 	function _checkSetting(uint parameter, uint min, uint max) internal view {
 		_checkAdmin();
-		require(parameter >= min, "Impermax: INVALID_SETTING");
-		require(parameter <= max, "Impermax: INVALID_SETTING");
+		_require(parameter >= min, Errors.INVALID_SETTING);
+		_require(parameter <= max, Errors.INVALID_SETTING);
 	}
 	
 	function _checkAdmin() internal view {
-		require(msg.sender == IFactory(factory).admin(), "Impermax: UNAUTHORIZED");
+		_require(msg.sender == IFactory(factory).admin(), Errors.UNAUTHORIZED_CALL);
 	}
 }

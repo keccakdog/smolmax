@@ -1,5 +1,7 @@
 pragma solidity 0.8.13;
 
+import "./libraries/Errors.sol";
+
 contract BStorage {
 
 	address public collateral;
@@ -30,7 +32,7 @@ contract BStorage {
 	address public borrowTracker;
 
     function safe112(uint n) internal pure returns (uint112) {
-        require(n < 2**112, "Impermax: SAFE112");
+        _require(n < 2**112, Errors.SAFE112);
         return uint112(n);
     }
 }
