@@ -84,6 +84,12 @@ library Errors {
     uint256 internal constant UNAUTHORIZED_CALL = 5;
 
     // Borrowable
+    uint256 internal constant INSUFFICIENT_CASH = 6;
+    uint256 internal constant INSUFFICIENT_LIQUIDITY = 7;
     
     // Collateral
+    uint256 internal constant PRICE_CALCULATION_ERROR = 8;
+    uint256 internal constant INVALID_BORROWABLE = 9;
+    uint256 internal constant INSUFFICIENT_SHORTFALL = 10;
+    uint256 internal constant INSUFFICIENT_REDEEM_TOKENS = 11;
 }

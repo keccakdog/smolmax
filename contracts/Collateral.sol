@@ -11,12 +11,13 @@ import "./interfaces/IImpermaxCallee.sol";
 import "./interfaces/IUniswapV2Pair.sol";
 import "./libraries/UQ112x112.sol";
 import "./libraries/Math.sol";
+import "./libraries/Errors.sol";
 
-contract Collateral is ICollateral, PoolToken, CStorage, CSetter {
+// TODO: Inherit ICollateral
+contract Collateral is PoolToken, CStorage, CSetter {
+	using SafeMath for uint256;
 	using UQ112x112 for uint224;
-	
-	constructor() public {}
-	
+		
 	/*** Collateralization Model ***/
 	
 	function getTwapPrice112x112() public returns(uint224 twapPrice112x112) {
@@ -30,22 +31,22 @@ contract Collateral is ICollateral, PoolToken, CStorage, CSetter {
 		uint256 collateralTotalSupply = IUniswapV2Pair(underlying).totalSupply();
 		
 		uint224 currentPrice112x112 = UQ112x112.encode(reserve1).uqdiv(reserve0);
-		uint256 adjustmentSquared = uint256(twapPrice112x112).mul(2**32).div(currentPrice112x112);
-		uint256 adjustment = Math.sqrt(adjustmentSquared.mul(2**32));
+		uint256 adjustmentSquared = (uint256(twapPrice112x112) * (2**32)) / currentPrice112x112;
+		uint256 adjustment = Math.sqrt(adjustmentSquared * (2**32));
 
-		uint256 currentBorrowable0Price = uint256(collateralTotalSupply).mul(1e18).div(reserve0*2);
-		uint256 currentBorrowable1Price = uint256(collateralTotalSupply).mul(1e18).div(reserve1*2);
+		uint256 currentBorrowable0Price = (uint256(collateralTotalSupply) * 1e18) / (reserve0*2);
+		uint256 currentBorrowable1Price = (uint256(collateralTotalSupply) * 1e18) / (reserve1*2);
 		
-		price0 = currentBorrowable0Price.mul(adjustment).div(2**32);
-		price1 = currentBorrowable1Price.mul(2**32).div(adjustment);
+		price0 = (currentBorrowable0Price * adjustment) / (2**32);
+		price1 = (currentBorrowable1Price * (2**32)) / adjustment;
 		
 		/*
 		 * Price calculation errors may happen in some edge pairs where
 		 * reserve0 / reserve1 is close to 2**112 or 1/2**112
 		 * We're going to prevent users from using pairs at risk from the UI
 		 */
-		require(price0 > 100, "Impermax: PRICE_CALCULATION_ERROR");
-		require(price1 > 100, "Impermax: PRICE_CALCULATION_ERROR");
+		_require(price0 > 100, Errors.PRICE_CALCULATION_ERROR);
+		_require(price1 > 100, Errors.PRICE_CALCULATION_ERROR);
 	}
 	
 	// returns liquidity in  collateral's underlying
@@ -53,12 +54,12 @@ contract Collateral is ICollateral, PoolToken, CStorage, CSetter {
 		uint _safetyMarginSqrt = safetyMarginSqrt;
 		(uint price0, uint price1) = getPrices();
 		
-		uint a = amount0.mul(price0).div(1e18);
-		uint b = amount1.mul(price1).div(1e18);
+		uint a = (amount0 * price0) / 1e18;
+		uint b = (amount1 * price1) / 1e18;
 		if(a < b) (a, b) = (b, a);
-		a = a.mul(_safetyMarginSqrt).div(1e18);
-		b = b.mul(1e18).div(_safetyMarginSqrt);
-		uint collateralNeeded = a.add(b).mul(liquidationPenalty()).div(1e18);		
+		a = (a * _safetyMarginSqrt) / 1e18;
+		b = (b * 1e18) / _safetyMarginSqrt;
+		uint collateralNeeded = ((a + b) * liquidationPenalty()) / 1e18;		
 
 		if(amountCollateral >= collateralNeeded){
 			return (amountCollateral - collateralNeeded, 0);
@@ -69,8 +70,8 @@ contract Collateral is ICollateral, PoolToken, CStorage, CSetter {
 
 	/*** ERC20 ***/
 	
-	function _transfer(address from, address to, uint value) internal {
-		require(tokensUnlocked(from, value), "Impermax: INSUFFICIENT_LIQUIDITY");
+	function _transfer(address from, address to, uint value) internal override {
+		_require(tokensUnlocked(from, value), Errors.INSUFFICIENT_LIQUIDITY);
 		super._transfer(from, to, value);
 	}
 	
@@ -78,7 +79,7 @@ contract Collateral is ICollateral, PoolToken, CStorage, CSetter {
 		uint _balance = balanceOf[from];
 		if (value > _balance) return false;
 		uint finalBalance = _balance - value;
-		uint amountCollateral = finalBalance.mul(exchangeRate()).div(1e18);
+		uint amountCollateral = (finalBalance * exchangeRate()) / 1e18;
 		uint amount0 = IBorrowable(borrowable0).borrowBalance(from);
 		uint amount1 = IBorrowable(borrowable1).borrowBalance(from);
 		(, uint shortfall) = _calculateLiquidity(amountCollateral, amount0, amount1);
@@ -88,64 +89,64 @@ contract Collateral is ICollateral, PoolToken, CStorage, CSetter {
 	/*** Collateral ***/
 	
 	function accountLiquidityAmounts(address borrower, uint amount0, uint amount1) public returns (uint liquidity, uint shortfall) {
-		if (amount0 == uint(-1)) amount0 = IBorrowable(borrowable0).borrowBalance(borrower);
-		if (amount1 == uint(-1)) amount1 = IBorrowable(borrowable1).borrowBalance(borrower);
-		uint amountCollateral = balanceOf[borrower].mul(exchangeRate()).div(1e18);
+		if (amount0 == type(uint256).max) amount0 = IBorrowable(borrowable0).borrowBalance(borrower);
+		if (amount1 == type(uint256).max) amount1 = IBorrowable(borrowable1).borrowBalance(borrower);
+		uint amountCollateral = (balanceOf[borrower] * exchangeRate()) / 1e18;
 		return _calculateLiquidity(amountCollateral, amount0, amount1);
 	}
 	
 	function accountLiquidity(address borrower) public returns (uint liquidity, uint shortfall) {
-		return accountLiquidityAmounts(borrower, uint(-1), uint(-1));
+		return accountLiquidityAmounts(borrower, type(uint256).max, type(uint256).max);
 	}
 	
 	function canBorrow(address borrower, address borrowable, uint accountBorrows) public returns (bool) {
 		address _borrowable0 = borrowable0;
 		address _borrowable1 = borrowable1;
-		require(borrowable == _borrowable0 || borrowable == _borrowable1, "Impermax: INVALID_BORROWABLE" );
-		uint amount0 = borrowable == _borrowable0 ? accountBorrows : uint(-1);
-		uint amount1 = borrowable == _borrowable1 ? accountBorrows : uint(-1);
+		_require(borrowable == _borrowable0 || borrowable == _borrowable1, Errors.INVALID_BORROWABLE);
+		uint amount0 = borrowable == _borrowable0 ? accountBorrows : type(uint256).max;
+		uint amount1 = borrowable == _borrowable1 ? accountBorrows : type(uint256).max;
 		(, uint shortfall) = accountLiquidityAmounts(borrower, amount0, amount1);
 		return shortfall == 0;
 	}
 	
 	// this function must be called from borrowable0 or borrowable1
 	function seize(address liquidator, address borrower, uint repayAmount) external returns (uint seizeTokens) {
-		require(msg.sender == borrowable0 || msg.sender == borrowable1, "Impermax: UNAUTHORIZED");
+		_require(msg.sender == borrowable0 || msg.sender == borrowable1, Errors.UNAUTHORIZED_CALL);
 		
 		(, uint shortfall) = accountLiquidity(borrower);
-		require(shortfall > 0, "Impermax: INSUFFICIENT_SHORTFALL");
+		_require(shortfall > 0, Errors.INSUFFICIENT_SHORTFALL);
 		
 		uint price;
 		if (msg.sender == borrowable0) (price, ) = getPrices();
 		else  (, price) = getPrices();
 		
-		uint collateralEquivalent = repayAmount.mul(price).div( exchangeRate() );	
+		uint collateralEquivalent = (repayAmount * price) / exchangeRate();	
 		
-		seizeTokens = collateralEquivalent.mul(liquidationIncentive).div(1e18);		
+		seizeTokens = (collateralEquivalent * liquidationIncentive) / 1e18;		
 		balanceOf[borrower] = balanceOf[borrower].sub(seizeTokens, "Impermax: LIQUIDATING_TOO_MUCH");
-		balanceOf[liquidator] = balanceOf[liquidator].add(seizeTokens);
+		balanceOf[liquidator] = balanceOf[liquidator] + seizeTokens;
 		emit Transfer(borrower, liquidator, seizeTokens);
 		
 		if (liquidationFee > 0) {
 			uint seizeFee = collateralEquivalent.mul(liquidationFee).div(1e18);			
 			address reservesManager = IFactory(factory).reservesManager();
 			balanceOf[borrower] = balanceOf[borrower].sub(seizeFee, "Impermax: LIQUIDATING_TOO_MUCH");
-			balanceOf[reservesManager] = balanceOf[reservesManager].add(seizeFee);
+			balanceOf[reservesManager] = balanceOf[reservesManager] + seizeFee;
 			emit Transfer(borrower, reservesManager, seizeFee);
 		}
 	}
 
 	// this low-level function should be called from another contract
 	function flashRedeem(address redeemer, uint redeemAmount, bytes calldata data) external nonReentrant update {
-		require(redeemAmount <= totalBalance, "Impermax: INSUFFICIENT_CASH");
+		_require(redeemAmount <= totalBalance, Errors.INSUFFICIENT_CASH);
 		
 		// optimistically transfer funds
 		_safeTransfer(redeemer, redeemAmount);
 		if (data.length > 0) IImpermaxCallee(redeemer).impermaxRedeem(msg.sender, redeemAmount, data);
 		
 		uint redeemTokens = balanceOf[address(this)];
-		uint declaredRedeemTokens = redeemAmount.mul(1e18).div( exchangeRate() ).add(1); // rounded up
-		require(redeemTokens >= declaredRedeemTokens, "Impermax: INSUFFICIENT_REDEEM_TOKENS");
+		uint declaredRedeemTokens = ((redeemAmount * 1e18) / exchangeRate()) + 1; // rounded up
+		_require(redeemTokens >= declaredRedeemTokens, Errors.INSUFFICIENT_REDEEM_TOKENS);
 		
 		_burn(address(this), redeemTokens);
 		emit Redeem(msg.sender, redeemer, redeemAmount, redeemTokens);

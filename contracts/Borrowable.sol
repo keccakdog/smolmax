@@ -12,19 +12,19 @@ import "./interfaces/IERC20.sol";
 import "./interfaces/IFactory.sol";
 import "./interfaces/IBorrowTracker.sol";
 import "./libraries/Math.sol";
+import "./libraries/Errors.sol";
 
-contract Borrowable is IBorrowable, PoolToken, BStorage, BSetter, BInterestRateModel, BAllowance {
+// TODO: Inherit IBorrowable
+contract Borrowable is PoolToken, BStorage, BSetter, BInterestRateModel, BAllowance {
 
 	uint public constant BORROW_FEE = 0;
 
 	event Borrow(address indexed sender, address indexed borrower, address indexed receiver, uint borrowAmount, uint repayAmount, uint accountBorrowsPrior, uint accountBorrows, uint totalBorrows);
 	event Liquidate(address indexed sender, address indexed borrower, address indexed liquidator, uint seizeTokens, uint repayAmount, uint accountBorrowsPrior, uint accountBorrows, uint totalBorrows);
 		
-	constructor() public {}
-
 	/*** PoolToken ***/
 	
-	function _update() internal {
+	function _update() internal override {
 		super._update();
 		_calculateBorrowRate();
 	}
@@ -32,8 +32,8 @@ contract Borrowable is IBorrowable, PoolToken, BStorage, BSetter, BInterestRateM
 	function _mintReserves(uint _exchangeRate, uint _totalSupply) internal returns (uint) {
 		uint _exchangeRateLast = exchangeRateLast;
 		if (_exchangeRate > _exchangeRateLast) {
-			uint _exchangeRateNew = _exchangeRate.sub( _exchangeRate.sub(_exchangeRateLast).mul(reserveFactor).div(1e18) );
-			uint liquidity = _totalSupply.mul(_exchangeRate).div(_exchangeRateNew).sub(_totalSupply);
+			uint _exchangeRateNew = _exchangeRate - (((_exchangeRate - _exchangeRateLast) * reserveFactor) / 1e18);
+			uint liquidity = ((_totalSupply * _exchangeRate) / _exchangeRateNew) - _totalSupply;
 			if (liquidity > 0) {
 				address reservesManager = IFactory(factory).reservesManager();
 				_mint(reservesManager, liquidity);
@@ -44,16 +44,16 @@ contract Borrowable is IBorrowable, PoolToken, BStorage, BSetter, BInterestRateM
 		else return _exchangeRate;
 	}
 	
-	function exchangeRate() public accrue returns (uint)	{
+	function exchangeRate() public override accrue returns (uint) {
 		uint _totalSupply = totalSupply;
-		uint _actualBalance = totalBalance.add(totalBorrows);
+		uint _actualBalance = totalBalance + totalBorrows;
 		if (_totalSupply == 0 || _actualBalance == 0) return initialExchangeRate;
-		uint _exchangeRate = _actualBalance.mul(1e18).div(_totalSupply);
+		uint _exchangeRate = (_actualBalance * 1e18) / _totalSupply;
 		return _mintReserves(_exchangeRate, _totalSupply);
 	}
 	
 	// force totalBalance to match real balance
-	function sync() external nonReentrant update accrue {}
+	function sync() external override nonReentrant update accrue {}
 	
 	/*** Borrowable ***/
 
@@ -61,7 +61,7 @@ contract Borrowable is IBorrowable, PoolToken, BStorage, BSetter, BInterestRateM
 	function borrowBalance(address borrower) public view returns (uint) {
 		BorrowSnapshot memory borrowSnapshot = borrowBalances[borrower];
 		if (borrowSnapshot.interestIndex == 0) return 0; // not initialized
-		return uint(borrowSnapshot.principal).mul(borrowIndex).div(borrowSnapshot.interestIndex);
+		return (uint(borrowSnapshot.principal) * borrowIndex) / borrowSnapshot.interestIndex;
 	}
 	
 	function _trackBorrow(address borrower, uint accountBorrows, uint _borrowIndex) internal {
@@ -77,10 +77,10 @@ contract Borrowable is IBorrowable, PoolToken, BStorage, BSetter, BInterestRateM
 		if (borrowAmount > repayAmount) {
 			BorrowSnapshot storage borrowSnapshot = borrowBalances[borrower];
 			uint increaseAmount = borrowAmount - repayAmount;
-			accountBorrows = accountBorrowsPrior.add(increaseAmount);
+			accountBorrows = accountBorrowsPrior + increaseAmount;
 			borrowSnapshot.principal = safe112(accountBorrows);
 			borrowSnapshot.interestIndex = _borrowIndex;
-			_totalBorrows = uint(totalBorrows).add(increaseAmount);	
+			_totalBorrows = uint(totalBorrows) + increaseAmount;	
 			totalBorrows = safe112(_totalBorrows);
 		}
 		else {
@@ -93,7 +93,7 @@ contract Borrowable is IBorrowable, PoolToken, BStorage, BSetter, BInterestRateM
 			} else {
 				borrowSnapshot.interestIndex = _borrowIndex;
 			}
-			uint actualDecreaseAmount = accountBorrowsPrior.sub(accountBorrows);
+			uint actualDecreaseAmount = accountBorrowsPrior - accountBorrows;
 			_totalBorrows = totalBorrows; // gas savings
 			_totalBorrows = _totalBorrows > actualDecreaseAmount ? _totalBorrows - actualDecreaseAmount : 0;
 			totalBorrows = safe112(_totalBorrows);			
@@ -104,7 +104,7 @@ contract Borrowable is IBorrowable, PoolToken, BStorage, BSetter, BInterestRateM
 	// this low-level function should be called from another contract
 	function borrow(address borrower, address receiver, uint borrowAmount, bytes calldata data) external nonReentrant update accrue {		
 		uint _totalBalance = totalBalance;
-		require(borrowAmount <= _totalBalance, "Impermax: INSUFFICIENT_CASH");
+		_require(borrowAmount <= _totalBalance, Errors.INSUFFICIENT_CASH);
 		_checkBorrowAllowance(borrower, msg.sender, borrowAmount);
 		
 		// optimistically transfer funds
@@ -112,14 +112,14 @@ contract Borrowable is IBorrowable, PoolToken, BStorage, BSetter, BInterestRateM
 		if (data.length > 0) IImpermaxCallee(receiver).impermaxBorrow(msg.sender, borrower, borrowAmount, data);
 		uint balance = IERC20(underlying).balanceOf(address(this));
 		
-		uint borrowFee = borrowAmount.mul(BORROW_FEE).div(1e18);
-		uint adjustedBorrowAmount = borrowAmount.add(borrowFee);
-		uint repayAmount = balance.add(borrowAmount).sub(_totalBalance);
+		uint borrowFee = (borrowAmount * BORROW_FEE) / 1e18;
+		uint adjustedBorrowAmount = borrowAmount + borrowFee;
+		uint repayAmount = (balance + borrowAmount) - _totalBalance;
 		(uint accountBorrowsPrior, uint accountBorrows, uint _totalBorrows) = _updateBorrow(borrower, adjustedBorrowAmount, repayAmount);
 		
-		if(adjustedBorrowAmount > repayAmount) require(
+		if(adjustedBorrowAmount > repayAmount) _require(
 			ICollateral(collateral).canBorrow(borrower, address(this), accountBorrows),
-			"Impermax: INSUFFICIENT_LIQUIDITY"
+			Errors.INSUFFICIENT_LIQUIDITY
 		);
 		
 		emit Borrow(msg.sender, borrower, receiver, borrowAmount, repayAmount, accountBorrowsPrior, accountBorrows, _totalBorrows);
@@ -128,7 +128,7 @@ contract Borrowable is IBorrowable, PoolToken, BStorage, BSetter, BInterestRateM
 	// this low-level function should be called from another contract
 	function liquidate(address borrower, address liquidator) external nonReentrant update accrue returns (uint seizeTokens) {
 		uint balance = IERC20(underlying).balanceOf(address(this));
-		uint repayAmount = balance.sub(totalBalance);		
+		uint repayAmount = balance - totalBalance;		
 		
 		uint actualRepayAmount = Math.min(borrowBalance(borrower), repayAmount);
 		seizeTokens = ICollateral(collateral).seize(liquidator, borrower, actualRepayAmount);	
