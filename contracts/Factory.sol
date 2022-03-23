@@ -1,4 +1,4 @@
-pragma solidity =0.5.16;
+pragma solidity 0.8.13;
 
 import "./interfaces/IFactory.sol";
 import "./interfaces/IBDeployer.sol";
@@ -8,8 +8,10 @@ import "./interfaces/ICollateral.sol";
 import "./interfaces/IERC20.sol";
 import "./interfaces/IUniswapV2Pair.sol";
 import "./interfaces/ISimpleUniswapOracle.sol";
+import "./libraries/Errors.sol";
 
-contract Factory is IFactory {
+// TODO: Inherit IFactory.
+contract Factory {
 	address public admin;
 	address public pendingAdmin;
 	address public reservesAdmin;
@@ -41,7 +43,7 @@ contract Factory is IFactory {
 	event NewReservesAdmin(address oldReservesAdmin, address newReservesAdmin);
 	event NewReservesManager(address oldReservesManager, address newReservesManager);
 	
-	constructor(address _admin, address _reservesAdmin, IBDeployer _bDeployer, ICDeployer _cDeployer, ISimpleUniswapOracle _simpleUniswapOracle) public {
+	constructor(address _admin, address _reservesAdmin, IBDeployer _bDeployer, ICDeployer _cDeployer, ISimpleUniswapOracle _simpleUniswapOracle) {
 		admin = _admin;
 		reservesAdmin = _reservesAdmin;
 		bDeployer = _bDeployer;
@@ -64,7 +66,7 @@ contract Factory is IFactory {
 	
 	function createCollateral(address uniswapV2Pair) external returns (address collateral) {
 		_getTokens(uniswapV2Pair);
-		require(getLendingPool[uniswapV2Pair].collateral == address(0), "Impermax: ALREADY_EXISTS");		
+		_require(getLendingPool[uniswapV2Pair].collateral == address(0), Errors.LENDING_COMPONENT_ALREADY_EXISTS);		
 		collateral = cDeployer.deployCollateral(uniswapV2Pair);
 		ICollateral(collateral)._setFactory();
 		_createLendingPool(uniswapV2Pair);
@@ -73,7 +75,7 @@ contract Factory is IFactory {
 	
 	function createBorrowable0(address uniswapV2Pair) external returns (address borrowable0) {
 		_getTokens(uniswapV2Pair);
-		require(getLendingPool[uniswapV2Pair].borrowable0 == address(0), "Impermax: ALREADY_EXISTS");		
+		_require(getLendingPool[uniswapV2Pair].borrowable0 == address(0), Errors.LENDING_COMPONENT_ALREADY_EXISTS);		
 		borrowable0 = bDeployer.deployBorrowable(uniswapV2Pair, 0);
 		IBorrowable(borrowable0)._setFactory();
 		_createLendingPool(uniswapV2Pair);
@@ -82,7 +84,7 @@ contract Factory is IFactory {
 	
 	function createBorrowable1(address uniswapV2Pair) external returns (address borrowable1) {
 		_getTokens(uniswapV2Pair);
-		require(getLendingPool[uniswapV2Pair].borrowable1 == address(0), "Impermax: ALREADY_EXISTS");		
+		_require(getLendingPool[uniswapV2Pair].borrowable1 == address(0), Errors.LENDING_COMPONENT_ALREADY_EXISTS);		
 		borrowable1 = bDeployer.deployBorrowable(uniswapV2Pair, 1);
 		IBorrowable(borrowable1)._setFactory();
 		_createLendingPool(uniswapV2Pair);
@@ -92,11 +94,11 @@ contract Factory is IFactory {
 	function initializeLendingPool(address uniswapV2Pair) external {
 		(address token0, address token1) = _getTokens(uniswapV2Pair);
 		LendingPool memory lPool = getLendingPool[uniswapV2Pair];
-		require(!lPool.initialized, "Impermax: ALREADY_INITIALIZED");
+		_require(!lPool.initialized, Errors.LENDING_POOL_ALREADY_INITIALIZED);
 		
-		require(lPool.collateral != address(0), "Impermax: COLLATERALIZABLE_NOT_CREATED");
-		require(lPool.borrowable0 != address(0), "Impermax: BORROWABLE0_NOT_CREATED");
-		require(lPool.borrowable1 != address(0), "Impermax: BORROWABLE1_NOT_CREATED");
+		_require(lPool.collateral != address(0), Errors.COLLATERAL_NOT_CREATED);
+		_require(lPool.borrowable0 != address(0), Errors.BORROWABLE_ZERO_NOT_CREATED);
+		_require(lPool.borrowable1 != address(0), Errors.BORROWABLE_ONE_NOT_CREATED);
 		
 		(,,,,,bool oracleInitialized) = simpleUniswapOracle.getPair(uniswapV2Pair);
 		if (!oracleInitialized) simpleUniswapOracle.initialize(uniswapV2Pair);
@@ -110,14 +112,14 @@ contract Factory is IFactory {
 	}
 	
 	function _setPendingAdmin(address newPendingAdmin) external {
-		require(msg.sender == admin, "Impermax: UNAUTHORIZED");
+		_require(msg.sender == admin, Errors.UNAUTHORIZED_CALL);
 		address oldPendingAdmin = pendingAdmin;
 		pendingAdmin = newPendingAdmin;
 		emit NewPendingAdmin(oldPendingAdmin, newPendingAdmin);
 	}
 
 	function _acceptAdmin() external {
-		require(msg.sender == pendingAdmin, "Impermax: UNAUTHORIZED");
+		_require(msg.sender == pendingAdmin, Errors.UNAUTHORIZED_CALL);
 		address oldAdmin = admin;
 		address oldPendingAdmin = pendingAdmin;
 		admin = pendingAdmin;
@@ -127,14 +129,14 @@ contract Factory is IFactory {
 	}
 	
 	function _setReservesPendingAdmin(address newReservesPendingAdmin) external {
-		require(msg.sender == reservesAdmin, "Impermax: UNAUTHORIZED");
+		_require(msg.sender == reservesAdmin, Errors.UNAUTHORIZED_CALL);
 		address oldReservesPendingAdmin = reservesPendingAdmin;
 		reservesPendingAdmin = newReservesPendingAdmin;
 		emit NewReservesPendingAdmin(oldReservesPendingAdmin, newReservesPendingAdmin);
 	}
 
 	function _acceptReservesAdmin() external {
-		require(msg.sender == reservesPendingAdmin, "Impermax: UNAUTHORIZED");
+		_require(msg.sender == reservesPendingAdmin, Errors.UNAUTHORIZED_CALL);
 		address oldReservesAdmin = reservesAdmin;
 		address oldReservesPendingAdmin = reservesPendingAdmin;
 		reservesAdmin = reservesPendingAdmin;
@@ -144,7 +146,7 @@ contract Factory is IFactory {
 	}
 
 	function _setReservesManager(address newReservesManager) external {
-		require(msg.sender == reservesAdmin, "Impermax: UNAUTHORIZED");
+		_require(msg.sender == reservesAdmin, Errors.UNAUTHORIZED_CALL);
 		address oldReservesManager = reservesManager;
 		reservesManager = newReservesManager;
 		emit NewReservesManager(oldReservesManager, newReservesManager);

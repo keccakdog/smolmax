@@ -1,4 +1,4 @@
-pragma solidity =0.5.16;
+pragma solidity 0.8.13;
 
 import "./BStorage.sol";
 import "./PoolToken.sol";
@@ -50,7 +50,7 @@ contract BInterestRateModel is PoolToken, BStorage {
 		uint _utilizationRate;
 		{ // avoid stack to deep
 		uint _totalBorrows = totalBorrows; // gas savings
-		uint _actualBalance = totalBalance.add(_totalBorrows);
+		uint _actualBalance = totalBalance + _totalBorrows;
 		_utilizationRate = (_actualBalance == 0) ? 0 : _totalBorrows * 1e18 / _actualBalance;
 		}
 		
@@ -79,10 +79,10 @@ contract BInterestRateModel is PoolToken, BStorage {
 		uint32 timeElapsed = blockTimestamp - _accrualTimestamp; // underflow is desired
 		accrualTimestamp = blockTimestamp;
 		
-		uint interestFactor = uint(borrowRate).mul(timeElapsed);	
-		uint interestAccumulated = interestFactor.mul(_totalBorrows).div(1e18);
-		_totalBorrows = _totalBorrows.add( interestAccumulated );
-		_borrowIndex = _borrowIndex.add( interestFactor.mul(_borrowIndex).div(1e18) );
+		uint interestFactor = uint(borrowRate) * timeElapsed;	
+		uint interestAccumulated = (interestFactor * _totalBorrows) / 1e18;
+		_totalBorrows = _totalBorrows + interestAccumulated;
+		_borrowIndex = _borrowIndex + ((interestFactor * _borrowIndex) / 1e18);
 	
 		borrowIndex = safe112(_borrowIndex);
 		totalBorrows = safe112(_totalBorrows);

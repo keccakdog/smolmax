@@ -1,4 +1,4 @@
-pragma solidity =0.5.16;
+pragma solidity 0.8.13;
 
 import "./libraries/SafeMath.sol";
 
@@ -20,15 +20,13 @@ contract ImpermaxERC20 {
 	
 	event Transfer(address indexed from, address indexed to, uint value);
 	event Approval(address indexed owner, address indexed spender, uint value);
-
-	constructor() public {}	
 	
 	function _setName(string memory _name, string memory _symbol) internal {
 		name = _name;
 		symbol = _symbol;
 		uint chainId;
 		assembly {
-			chainId := chainid
+			chainId := chainid()
 		}
 		DOMAIN_SEPARATOR = keccak256(
 			abi.encode(
@@ -75,7 +73,7 @@ contract ImpermaxERC20 {
 	}
 
 	function transferFrom(address from, address to, uint value) external returns (bool) {
-		if (allowance[from][msg.sender] != uint(-1)) {
+		if (allowance[from][msg.sender] != type(uint256).max) {
 			allowance[from][msg.sender] = allowance[from][msg.sender].sub(value, "Impermax: TRANSFER_NOT_ALLOWED");
 		}
 		_transfer(from, to, value);

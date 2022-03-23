@@ -1,11 +1,12 @@
-pragma solidity =0.5.16;
+pragma solidity 0.8.13;
 
 import "./ImpermaxERC20.sol";
 import "./interfaces/IERC20.sol";
 import "./interfaces/IPoolToken.sol";
 import "./libraries/SafeMath.sol";
 
-contract PoolToken is IPoolToken, ImpermaxERC20 {
+// TODO: Inherit IPoolToken
+contract PoolToken is ImpermaxERC20 {
    	uint internal constant initialExchangeRate = 1e18;
 	address public underlying;
 	address public factory;
@@ -36,18 +37,18 @@ contract PoolToken is IPoolToken, ImpermaxERC20 {
 		uint _totalSupply = totalSupply; // gas savings
 		uint _totalBalance = totalBalance; // gas savings
 		if (_totalSupply == 0 || _totalBalance == 0) return initialExchangeRate;
-		return _totalBalance.mul(1e18).div(_totalSupply);
+		return (_totalBalance * 1e18) / _totalSupply;
 	}
 	
 	// this low-level function should be called from another contract
 	function mint(address minter) external nonReentrant update returns (uint mintTokens) {
 		uint balance = IERC20(underlying).balanceOf(address(this));
-		uint mintAmount = balance.sub(totalBalance);
-		mintTokens = mintAmount.mul(1e18).div(exchangeRate());
+		uint mintAmount = balance - totalBalance;
+		mintTokens = (mintAmount * 1e18) / exchangeRate();
 
 		if(totalSupply == 0) {
 			// permanently lock the first MINIMUM_LIQUIDITY tokens
-			mintTokens = mintTokens.sub(MINIMUM_LIQUIDITY);
+			mintTokens = mintTokens - MINIMUM_LIQUIDITY;
 			_mint(address(0), MINIMUM_LIQUIDITY);
 		}
 		require(mintTokens > 0, "Impermax: MINT_AMOUNT_ZERO");
@@ -58,7 +59,7 @@ contract PoolToken is IPoolToken, ImpermaxERC20 {
 	// this low-level function should be called from another contract
 	function redeem(address redeemer) external nonReentrant update returns (uint redeemAmount) {
 		uint redeemTokens = balanceOf[address(this)];
-		redeemAmount = redeemTokens.mul(exchangeRate()).div(1e18);
+		redeemAmount = (redeemTokens * exchangeRate()) / 1e18;
 
 		require(redeemAmount > 0, "Impermax: REDEEM_AMOUNT_ZERO");
 		require(redeemAmount <= totalBalance, "Impermax: INSUFFICIENT_CASH");
@@ -69,7 +70,7 @@ contract PoolToken is IPoolToken, ImpermaxERC20 {
 
 	// force real balance to match totalBalance
 	function skim(address to) external nonReentrant {
-		_safeTransfer(to, IERC20(underlying).balanceOf(address(this)).sub(totalBalance));
+		_safeTransfer(to, IERC20(underlying).balanceOf(address(this)) - totalBalance);
 	}
 
 	// force totalBalance to match real balance
