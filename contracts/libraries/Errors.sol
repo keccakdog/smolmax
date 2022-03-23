@@ -101,4 +101,15 @@ library Errors {
 
     // Borrowable Storage
     uint256 internal constant SAFE112 = 14;
+
+    // Impermax ERC20
+    uint256 internal constant EXPIRED = 15;
+    uint256 internal constant INVALID_SIGNATURE = 16;
+
+    // Pool token
+    uint256 internal constant FACTORY_ALREADY_SET = 17;
+    uint256 internal constant MINT_AMOUNT_ZERO = 18;
+    uint256 internal constant REDEEM_AMOUNT_ZERO = 19;
+    uint256 internal constant TRANSFER_FAILED = 20;
+    uint256 internal constant REENTERED = 21;
 }

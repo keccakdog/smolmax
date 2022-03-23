@@ -4,6 +4,7 @@ import "./ImpermaxERC20.sol";
 import "./interfaces/IERC20.sol";
 import "./interfaces/IPoolToken.sol";
 import "./libraries/SafeMath.sol";
+import "./libraries/Errors.sol";
 
 // TODO: Inherit IPoolToken
 contract PoolToken is ImpermaxERC20 {
@@ -21,7 +22,7 @@ contract PoolToken is ImpermaxERC20 {
 	
 	// called once by the factory
 	function _setFactory() external {
-		require(factory == address(0), "Impermax: FACTORY_ALREADY_SET");
+		_require(factory == address(0), Errors.FACTORY_ALREADY_SET);
 		factory = msg.sender;
 	}
 	
@@ -51,7 +52,7 @@ contract PoolToken is ImpermaxERC20 {
 			mintTokens = mintTokens - MINIMUM_LIQUIDITY;
 			_mint(address(0), MINIMUM_LIQUIDITY);
 		}
-		require(mintTokens > 0, "Impermax: MINT_AMOUNT_ZERO");
+		_require(mintTokens > 0, Errors.MINT_AMOUNT_ZERO);
 		_mint(minter, mintTokens);
 		emit Mint(msg.sender, minter, mintAmount, mintTokens);
 	}
@@ -61,8 +62,8 @@ contract PoolToken is ImpermaxERC20 {
 		uint redeemTokens = balanceOf[address(this)];
 		redeemAmount = (redeemTokens * exchangeRate()) / 1e18;
 
-		require(redeemAmount > 0, "Impermax: REDEEM_AMOUNT_ZERO");
-		require(redeemAmount <= totalBalance, "Impermax: INSUFFICIENT_CASH");
+		_require(redeemAmount > 0, Errors.REDEEM_AMOUNT_ZERO);
+		_require(redeemAmount <= totalBalance, Errors.INSUFFICIENT_CASH);
 		_burn(address(this), redeemTokens);
 		_safeTransfer(redeemer, redeemAmount);
 		emit Redeem(msg.sender, redeemer, redeemAmount, redeemTokens);		
@@ -82,13 +83,13 @@ contract PoolToken is ImpermaxERC20 {
 	bytes4 private constant SELECTOR = bytes4(keccak256(bytes("transfer(address,uint256)")));
 	function _safeTransfer(address to, uint amount) internal {
 		(bool success, bytes memory data) = underlying.call(abi.encodeWithSelector(SELECTOR, to, amount));
-		require(success && (data.length == 0 || abi.decode(data, (bool))), "Impermax: TRANSFER_FAILED");
+		_require(success && (data.length == 0 || abi.decode(data, (bool))), Errors.TRANSFER_FAILED);
 	}
 	
 	// prevents a contract from calling itself, directly or indirectly.
 	bool internal _notEntered = true;
 	modifier nonReentrant() {
-		require(_notEntered, "Impermax: REENTERED");
+		_require(_notEntered, Errors.REENTERED);
 		_notEntered = false;
 		_;
 		_notEntered = true;

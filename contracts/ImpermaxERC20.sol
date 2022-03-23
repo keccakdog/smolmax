@@ -1,6 +1,7 @@
 pragma solidity 0.8.13;
 
 import "./libraries/SafeMath.sol";
+import "./libraries/Errors.sol";
 
 // This contract is basically UniswapV2ERC20 with small modifications
 // src: https://github.com/Uniswap/uniswap-v2-core/blob/master/contracts/UniswapV2ERC20.sol
@@ -81,7 +82,7 @@ contract ImpermaxERC20 {
 	}
 	
 	function _checkSignature(address owner, address spender, uint value, uint deadline, uint8 v, bytes32 r, bytes32 s, bytes32 typehash) internal {
-		require(deadline >= block.timestamp, "Impermax: EXPIRED");
+		_require(deadline >= block.timestamp, Errors.EXPIRED);
 		bytes32 digest = keccak256(
 			abi.encodePacked(
 				'\x19\x01',
@@ -90,7 +91,7 @@ contract ImpermaxERC20 {
 			)
 		);
 		address recoveredAddress = ecrecover(digest, v, r, s);
-		require(recoveredAddress != address(0) && recoveredAddress == owner, "Impermax: INVALID_SIGNATURE");	
+		_require(recoveredAddress != address(0) && recoveredAddress == owner, Errors.INVALID_SIGNATURE);	
 	}
 
 	// keccak256("Permit(address owner,address spender,uint256 value,uint256 nonce,uint256 deadline)");
