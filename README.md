@@ -1,4 +1,5 @@
-### Impermax x Uniswap V2 Core
+### Smolmax
+A gas-efficient fork of Impermax.
 
 In order to understand the scope of this project and how it works we suggest the following readings:
 - [Impermax x Uniswap V2 Whitepaper](https://impermax.finance/Whitepaper-Impermax-UniswapV2.pdf "Impermax x Uniswap V2 Whitepaper"): this document explains the scope and the components of this project from a high level perspective.
