@@ -413,7 +413,7 @@ contract Router is IRouter, IImpermaxCallee {
         redeemTokens = redeemTokens < tokensBalance
             ? redeemTokens
             : tokensBalance;
-        require(redeemTokens > 0, "ImpermaxRouter: REDEEM_ZERO");
+        require(redeemTokens > 0, "SmolmaxRouter: REDEEM_ZERO");
         uint256 exchangeRate = ICollateral(collateral).exchangeRate();
         uint256 redeemAmount = (((redeemTokens - 1) * exchangeRate) / 1e18);
         bytes memory redeemData = abi.encode(
@@ -465,11 +465,11 @@ contract Router is IRouter, IImpermaxCallee {
             .burn(address(this));
         require(
             amountAMax >= amountAMin,
-            "ImpermaxRouter: INSUFFICIENT_A_AMOUNT"
+            "SmolmaxRouter: INSUFFICIENT_A_AMOUNT"
         );
         require(
             amountBMax >= amountBMin,
-            "ImpermaxRouter: INSUFFICIENT_B_AMOUNT"
+            "SmolmaxRouter: INSUFFICIENT_B_AMOUNT"
         );
         // repay and refund
         _repayAndRefund(borrowableA, tokenA, borrower, amountAMax);
@@ -502,7 +502,7 @@ contract Router is IRouter, IImpermaxCallee {
         }
     }
 
-    /*** Impermax Callee ***/
+    /*** Smolmax Callee ***/
 
     enum CallType {
         ADD_LIQUIDITY_AND_MINT,
@@ -547,11 +547,11 @@ contract Router is IRouter, IImpermaxCallee {
             calleeData.underlying,
             calleeData.borrowableIndex
         );
-        // only succeeds if called by a borrowable and if that borrowable has been called by the router
-        require(sender == address(this), "ImpermaxRouter: SENDER_NOT_ROUTER");
+        /// @dev only succeeds if called by a borrowable and if that borrowable has been called by the router
+        require(sender == address(this), "SmolmaxRouter: SENDER_NOT_ROUTER");
         require(
             msg.sender == declaredCaller,
-            "ImpermaxRouter: UNAUTHORIZED_CALLER"
+            "SmolmaxRouter: UNAUTHORIZED_CALLER"
         );
         if (calleeData.callType == CallType.ADD_LIQUIDITY_AND_MINT) {
             AddLiquidityAndMintCalldata memory d = abi.decode(
@@ -587,11 +587,11 @@ contract Router is IRouter, IImpermaxCallee {
         redeemAmount;
         CalleeData memory calleeData = abi.decode(data, (CalleeData));
         address declaredCaller = getCollateral(calleeData.underlying);
-        // only succeeds if called by a collateral and if that collateral has been called by the router
-        require(sender == address(this), "ImpermaxRouter: SENDER_NOT_ROUTER");
+        /// @dev only succeeds if called by a collateral and if that collateral has been called by the router
+        require(sender == address(this), "SmolmaxRouter: SENDER_NOT_ROUTER");
         require(
             msg.sender == declaredCaller,
-            "ImpermaxRouter: UNAUTHORIZED_CALLER"
+            "SmolmaxRouter: UNAUTHORIZED_CALLER"
         );
         if (calleeData.callType == CallType.REMOVE_LIQ_AND_REPAY) {
             RemoveLiqAndRepayCalldata memory d = abi.decode(
@@ -674,7 +674,7 @@ contract Router is IRouter, IImpermaxCallee {
         if (amountBOptimal <= amountBDesired) {
             require(
                 amountBOptimal >= amountBMin,
-                "ImpermaxRouter: INSUFFICIENT_B_AMOUNT"
+                "SmolmaxRouter: INSUFFICIENT_B_AMOUNT"
             );
             (amountA, amountB) = (amountADesired, amountBOptimal);
         } else {
@@ -686,7 +686,7 @@ contract Router is IRouter, IImpermaxCallee {
             assert(amountAOptimal <= amountADesired);
             require(
                 amountAOptimal >= amountAMin,
-                "ImpermaxRouter: INSUFFICIENT_A_AMOUNT"
+                "SmolmaxRouter: INSUFFICIENT_A_AMOUNT"
             );
             (amountA, amountB) = (amountAOptimal, amountBDesired);
         }
@@ -717,7 +717,7 @@ contract Router is IRouter, IImpermaxCallee {
         address underlying,
         uint8 index
     ) public view virtual override returns (address borrowable) {
-        require(index < 2, "ImpermaxRouter: INDEX_TOO_HIGH");
+        require(index < 2, "SmolmaxRouter: INDEX_TOO_HIGH");
         (, , , address borrowable0, address borrowable1) = IFactory(factory)
             .getLendingPool(underlying);
         return index == 0 ? borrowable0 : borrowable1;
