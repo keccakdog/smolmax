@@ -1,18 +1,18 @@
 pragma solidity 0.8.13;
 
-import "./PoolToken.sol";
-import "./BAllowance.sol";
-import "./BInterestRateModel.sol";
-import "./BSetter.sol";
-import "./BStorage.sol";
-import "./interfaces/IBorrowable.sol";
-import "./interfaces/ICollateral.sol";
-import "./interfaces/IImpermaxCallee.sol";
-import "./interfaces/IERC20.sol";
-import "./interfaces/IFactory.sol";
-import "./interfaces/IBorrowTracker.sol";
-import "./libraries/Math.sol";
-import "./libraries/Errors.sol";
+import {PoolToken} from "./PoolToken.sol";
+import {BAllowance} from "./BAllowance.sol";
+import {BInterestRateModel} from "./BInterestRateModel.sol";
+import {BSetter} from "./BSetter.sol";
+import {BStorage} "./BStorage.sol";
+import {IBorrowable} from "./interfaces/IBorrowable.sol";
+import {ICollateral} from "./interfaces/ICollateral.sol";
+import {IImpermaxCallee} from "./interfaces/IImpermaxCallee.sol";
+import {IERC20} from "./interfaces/IERC20.sol";
+import {IFactory} from "./interfaces/IFactory.sol";
+import {IBorrowTracker} from "./interfaces/IBorrowTracker.sol";
+import {Math} from "./libraries/Math.sol";
+import {_require, Errors} from "./libraries/Errors.sol";
 
 // TODO: Inherit IBorrowable
 contract Borrowable is PoolToken, BStorage, BSetter, BInterestRateModel, BAllowance {

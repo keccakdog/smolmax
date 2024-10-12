@@ -1,14 +1,14 @@
 pragma solidity 0.8.13;
 
-import "./interfaces/IFactory.sol";
-import "./interfaces/IBDeployer.sol";
-import "./interfaces/IBorrowable.sol";
-import "./interfaces/ICDeployer.sol";
-import "./interfaces/ICollateral.sol";
-import "./interfaces/IERC20.sol";
-import "./interfaces/IUniswapV2Pair.sol";
-import "./interfaces/ISimpleUniswapOracle.sol";
-import "./libraries/Errors.sol";
+import {IFactory} from "./interfaces/IFactory.sol";
+import {IBorrowable} from "./interfaces/IBorrowable.sol";
+import {ICollateral} from "./interfaces/ICollateral.sol";
+import {IERC20} from "./interfaces/IERC20.sol";
+import {IUniswapV2Pair} from "./interfaces/IUniswapV2Pair.sol";
+import {ISimpleUniswapOracle} from "./interfaces/ISimpleUniswapOracle.sol";
+import {_require, Errors} from "./libraries/Errors.sol";
+import {Borrowable} from "./Borrowable.sol";
+import {Collateral} from "./Collateral.sol";
 
 // TODO: Inherit IFactory.
 contract Factory {
@@ -31,8 +31,6 @@ contract Factory {
 		return allLendingPools.length;
 	}
 	
-	IBDeployer public bDeployer;
-	ICDeployer public cDeployer;
 	ISimpleUniswapOracle public simpleUniswapOracle;
 	
 	event LendingPoolInitialized(address indexed uniswapV2Pair, address indexed token0, address indexed token1,
@@ -43,11 +41,9 @@ contract Factory {
 	event NewReservesAdmin(address oldReservesAdmin, address newReservesAdmin);
 	event NewReservesManager(address oldReservesManager, address newReservesManager);
 	
-	constructor(address _admin, address _reservesAdmin, IBDeployer _bDeployer, ICDeployer _cDeployer, ISimpleUniswapOracle _simpleUniswapOracle) {
+	constructor(address _admin, address _reservesAdmin, ISimpleUniswapOracle _simpleUniswapOracle) {
 		admin = _admin;
 		reservesAdmin = _reservesAdmin;
-		bDeployer = _bDeployer;
-		cDeployer = _cDeployer;
 		simpleUniswapOracle = _simpleUniswapOracle;
 		emit NewAdmin(address(0), _admin);
 		emit NewReservesAdmin(address(0), _reservesAdmin);
@@ -64,10 +60,19 @@ contract Factory {
 		getLendingPool[uniswapV2Pair] = LendingPool(false, uint24(allLendingPools.length), address(0), address(0), address(0));
 	}
 	
+  /// @notice Creates a new lending collateral.
+  /// @param uniswapV2Pair Pair used for the collateral.
+  /// @return collateral Collateral contract created.
 	function createCollateral(address uniswapV2Pair) external returns (address collateral) {
 		_getTokens(uniswapV2Pair);
 		_require(getLendingPool[uniswapV2Pair].collateral == address(0), Errors.LENDING_COMPONENT_ALREADY_EXISTS);		
-		collateral = cDeployer.deployCollateral(uniswapV2Pair);
+		
+    bytes memory bytecode = type(Collateral).creationCode;
+    bytes32 salt = keccak256(abi.encodePacked(address(this), uniswapV2Pair));
+    assembly {
+      collateral := create2(0, add(bytecode, 32), mload(bytecode), salt)
+    }
+
 		ICollateral(collateral)._setFactory();
 		_createLendingPool(uniswapV2Pair);
 		getLendingPool[uniswapV2Pair].collateral = collateral;
@@ -76,7 +81,13 @@ contract Factory {
 	function createBorrowable0(address uniswapV2Pair) external returns (address borrowable0) {
 		_getTokens(uniswapV2Pair);
 		_require(getLendingPool[uniswapV2Pair].borrowable0 == address(0), Errors.LENDING_COMPONENT_ALREADY_EXISTS);		
-		borrowable0 = bDeployer.deployBorrowable(uniswapV2Pair, 0);
+
+    bytes memory bytecode = type(Borrowable).creationCode;
+    bytes32 salt = keccak256(abi.encodePacked(address(this), uniswapV2Pair, 0));
+    assembly {
+      borrowable0 := create2(0, add(bytecode, 32), mload(bytecode), salt)
+    }
+	
 		IBorrowable(borrowable0)._setFactory();
 		_createLendingPool(uniswapV2Pair);
 		getLendingPool[uniswapV2Pair].borrowable0 = borrowable0;
@@ -85,7 +96,13 @@ contract Factory {
 	function createBorrowable1(address uniswapV2Pair) external returns (address borrowable1) {
 		_getTokens(uniswapV2Pair);
 		_require(getLendingPool[uniswapV2Pair].borrowable1 == address(0), Errors.LENDING_COMPONENT_ALREADY_EXISTS);		
-		borrowable1 = bDeployer.deployBorrowable(uniswapV2Pair, 1);
+    
+    bytes memory bytecode = type(Borrowable).creationCode;
+    bytes32 salt = keccak256(abi.encodePacked(address(this), uniswapV2Pair, 1));
+    assembly {
+      borrowable1 := create2(0 add(bytecode, 32), mload(bytecode), salt)
+    }
+
 		IBorrowable(borrowable1)._setFactory();
 		_createLendingPool(uniswapV2Pair);
 		getLendingPool[uniswapV2Pair].borrowable1 = borrowable1;
@@ -111,14 +128,14 @@ contract Factory {
 		emit LendingPoolInitialized(uniswapV2Pair, token0, token1, lPool.collateral, lPool.borrowable0, lPool.borrowable1, lPool.lendingPoolId);
 	}
 	
-	function _setPendingAdmin(address newPendingAdmin) external {
+	function setPendingAdmin(address newPendingAdmin) external {
 		_require(msg.sender == admin, Errors.UNAUTHORIZED_CALL);
 		address oldPendingAdmin = pendingAdmin;
 		pendingAdmin = newPendingAdmin;
 		emit NewPendingAdmin(oldPendingAdmin, newPendingAdmin);
 	}
 
-	function _acceptAdmin() external {
+	function acceptAdmin() external {
 		_require(msg.sender == pendingAdmin, Errors.UNAUTHORIZED_CALL);
 		address oldAdmin = admin;
 		address oldPendingAdmin = pendingAdmin;
@@ -128,14 +145,14 @@ contract Factory {
 		emit NewPendingAdmin(oldPendingAdmin, address(0));
 	}
 	
-	function _setReservesPendingAdmin(address newReservesPendingAdmin) external {
+	function setReservesPendingAdmin(address newReservesPendingAdmin) external {
 		_require(msg.sender == reservesAdmin, Errors.UNAUTHORIZED_CALL);
 		address oldReservesPendingAdmin = reservesPendingAdmin;
 		reservesPendingAdmin = newReservesPendingAdmin;
 		emit NewReservesPendingAdmin(oldReservesPendingAdmin, newReservesPendingAdmin);
 	}
 
-	function _acceptReservesAdmin() external {
+	function acceptReservesAdmin() external {
 		_require(msg.sender == reservesPendingAdmin, Errors.UNAUTHORIZED_CALL);
 		address oldReservesAdmin = reservesAdmin;
 		address oldReservesPendingAdmin = reservesPendingAdmin;
@@ -145,7 +162,7 @@ contract Factory {
 		emit NewReservesPendingAdmin(oldReservesPendingAdmin, address(0));
 	}
 
-	function _setReservesManager(address newReservesManager) external {
+	function setReservesManager(address newReservesManager) external {
 		_require(msg.sender == reservesAdmin, Errors.UNAUTHORIZED_CALL);
 		address oldReservesManager = reservesManager;
 		reservesManager = newReservesManager;
