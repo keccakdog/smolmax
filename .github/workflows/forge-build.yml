@@ -14,5 +14,8 @@ jobs:
       - name: Install Foundry
         uses: foundry-rs/foundry-toolchain@v1
 
-      - name: Run tests
+      - name: Install dependencies
+        run: forge install
+
+      - name: Run build
         run: forge build
