@@ -4,3 +4,10 @@ version = "1.9.3"
 url = "https://soldeer-revisions.s3.amazonaws.com/forge-std/1_9_3_30-09-2024_08:27:09_forge-std-1.9.zip"
 checksum = "351b6f9cde3d9476cc07e48c1bca6b7fd93fa16dd9b450e5ad5d169d1dbd5938"
 integrity = "d53734fbd7201cd9e44de730ae045ed8958dd2c7b9493c30b322f6e6c21ca8b2"
+
+[[dependencies]]
+name = "solady"
+version = "0.0.253"
+url = "https://soldeer-revisions.s3.amazonaws.com/solady/0_0_253_11-10-2024_08:06:45_solady.zip"
+checksum = "dd21217a51bf2bcfdb4762a3ac5538a543d66ae6a01aeb64a0bf175ddfdd6c15"
+integrity = "2920baa90cb1ffddab85a21eddd2f9daccb895eefb689d82cdf2fe63ce365263"

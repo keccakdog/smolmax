@@ -46,7 +46,13 @@ function _revert(uint256 errorCode) pure {
         // per character = 56) to locate it in the most significant part of the 256 slot (the beginning of a byte
         // array).
 
-        let revertReason := shl(200, add(0x494d0000000000, add(add(units, shl(8, tenths)), shl(16, hundreds))))
+        let revertReason := shl(
+            200,
+            add(
+                0x494d0000000000,
+                add(add(units, shl(8, tenths)), shl(16, hundreds))
+            )
+        )
 
         // We can now encode the reason in memory, which can be safely overwritten as we're about to revert. The encoded
         // message will have the following layout:
@@ -54,9 +60,15 @@ function _revert(uint256 errorCode) pure {
 
         // The Solidity revert reason identifier is 0x08c739a0, the function selector of the Error(string) function. We
         // also write zeroes to the next 28 bytes of memory, but those are about to be overwritten.
-        mstore(0x0, 0x08c379a000000000000000000000000000000000000000000000000000000000)
+        mstore(
+            0x0,
+            0x08c379a000000000000000000000000000000000000000000000000000000000
+        )
         // Next is the offset to the location of the string, which will be placed immediately after (20 bytes away).
-        mstore(0x04, 0x0000000000000000000000000000000000000000000000000000000000000020)
+        mstore(
+            0x04,
+            0x0000000000000000000000000000000000000000000000000000000000000020
+        )
         // The string length is fixed: 7 characters.
         mstore(0x24, 7)
         // Finally, the string itself is stored.
@@ -67,7 +79,6 @@ function _revert(uint256 errorCode) pure {
         revert(0, 100)
     }
 }
-
 
 /// @title "Smolmax" Errors Library
 /// @author Chainvisions
@@ -86,30 +97,35 @@ library Errors {
     // Borrowable
     uint256 internal constant INSUFFICIENT_CASH = 6;
     uint256 internal constant INSUFFICIENT_LIQUIDITY = 7;
-    
+
     // Collateral
     uint256 internal constant PRICE_CALCULATION_ERROR = 8;
     uint256 internal constant INVALID_BORROWABLE = 9;
     uint256 internal constant INSUFFICIENT_SHORTFALL = 10;
     uint256 internal constant INSUFFICIENT_REDEEM_TOKENS = 11;
+    uint256 internal constant LIQUIDATING_TOO_MUCH = 12;
 
     // Collateral/Borrowable setter
-    uint256 internal constant INVALID_SETTING = 12;
+    uint256 internal constant INVALID_SETTING = 13;
 
     // Borrowable Allowance
-    uint256 internal constant BORROW_NOT_ALLOWED = 13;
+    uint256 internal constant BORROW_NOT_ALLOWED = 14;
 
     // Borrowable Storage
-    uint256 internal constant SAFE112 = 14;
+    uint256 internal constant SAFE112 = 15;
 
     // Impermax ERC20
-    uint256 internal constant EXPIRED = 15;
-    uint256 internal constant INVALID_SIGNATURE = 16;
+    uint256 internal constant EXPIRED = 16;
+    uint256 internal constant INVALID_SIGNATURE = 17;
 
     // Pool token
-    uint256 internal constant FACTORY_ALREADY_SET = 17;
-    uint256 internal constant MINT_AMOUNT_ZERO = 18;
-    uint256 internal constant REDEEM_AMOUNT_ZERO = 19;
-    uint256 internal constant TRANSFER_FAILED = 20;
-    uint256 internal constant REENTERED = 21;
+    uint256 internal constant FACTORY_ALREADY_SET = 18;
+    uint256 internal constant MINT_AMOUNT_ZERO = 19;
+    uint256 internal constant REDEEM_AMOUNT_ZERO = 20;
+    uint256 internal constant TRANSFER_FAILED = 21;
+    uint256 internal constant REENTERED = 22;
+
+    // Router
+    uint256 internal constant NOT_WETH = 23;
 }
+

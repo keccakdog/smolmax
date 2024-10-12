@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: MIT
 pragma solidity 0.8.13;
 
+import {SafeTransferLib} from "solady/src/utils/SafeTransferLib.sol";
 import "./interfaces/IRouter.sol";
 import "./interfaces/IPoolToken.sol";
 import "./interfaces/IBorrowable.sol";
@@ -8,13 +9,14 @@ import "./interfaces/IFactory.sol";
 import "./interfaces/ICollateral.sol";
 import "./interfaces/IImpermaxCallee.sol";
 import "./interfaces/IERC20.sol";
-import "./interfaces/IStakedLPToken01.sol";
+import "./interfaces/IVault.sol";
 import "./interfaces/IWETH.sol";
 import "./interfaces/IUniswapV2Pair.sol";
-import "./libraries/TransferHelper.sol";
 import "./libraries/UniswapV2Library.sol";
 
 contract Router is IRouter, IImpermaxCallee {
+    using SafeTransferLib for address;
+
     address public immutable override factory;
     address public immutable override WETH;
 
@@ -49,9 +51,8 @@ contract Router is IRouter, IImpermaxCallee {
         address from,
         address to
     ) internal virtual returns (uint tokens) {
-        if (from == address(this))
-            TransferHelper.safeTransfer(token, poolToken, amount);
-        else TransferHelper.safeTransferFrom(token, from, poolToken, amount);
+        if (from == address(this)) token.safeTransfer(poolToken, amount);
+        else token.safeTransferFrom(from, poolToken, amount);
         tokens = IPoolToken(poolToken).mint(to);
     }
 
@@ -99,12 +100,7 @@ contract Router is IRouter, IImpermaxCallee {
         if (isStakedLPToken(underlying)) {
             address uniswapV2Pair = IStakedLPToken01(underlying).underlying();
             _permit(uniswapV2Pair, amount, deadline, permitData);
-            TransferHelper.safeTransferFrom(
-                uniswapV2Pair,
-                msg.sender,
-                underlying,
-                amount
-            );
+            uniswapV2Pair.safeTransferFrom(msg.sender, underlying, amount);
             IStakedLPToken01(underlying).mint(poolToken);
             return IPoolToken(poolToken).mint(to);
         } else {
@@ -180,7 +176,7 @@ contract Router is IRouter, IImpermaxCallee {
     ) public virtual override ensure(deadline) checkETH(borrowable) {
         borrow(borrowable, amountETH, address(this), deadline, permitData);
         IWETH(WETH).withdraw(amountETH);
-        TransferHelper.safeTransferETH(to, amountETH);
+        to.safeTransferETH(amountETH);
     }
 
     /*** Repay ***/
@@ -202,8 +198,7 @@ contract Router is IRouter, IImpermaxCallee {
         uint deadline
     ) external virtual override ensure(deadline) returns (uint amount) {
         amount = _repayAmount(borrowable, amountMax, borrower);
-        TransferHelper.safeTransferFrom(
-            IBorrowable(borrowable).underlying(),
+        IBorrowable(borrowable).underlying().safeTransferFrom(
             msg.sender,
             borrowable,
             amount
@@ -230,7 +225,7 @@ contract Router is IRouter, IImpermaxCallee {
         IBorrowable(borrowable).borrow(borrower, address(0), 0, new bytes(0));
         // refund surpluss eth, if any
         if (msg.value > amountETH)
-            TransferHelper.safeTransferETH(msg.sender, msg.value - amountETH);
+            msg.sender.safeTransferETH(msg.value - amountETH);
     }
 
     /*** Liquidate ***/
@@ -249,8 +244,7 @@ contract Router is IRouter, IImpermaxCallee {
         returns (uint amount, uint seizeTokens)
     {
         amount = _repayAmount(borrowable, amountMax, borrower);
-        TransferHelper.safeTransferFrom(
-            IBorrowable(borrowable).underlying(),
+        IBorrowable(borrowable).underlying().safeTransferFrom(
             msg.sender,
             borrowable,
             amount
@@ -278,7 +272,7 @@ contract Router is IRouter, IImpermaxCallee {
         seizeTokens = IBorrowable(borrowable).liquidate(borrower, to);
         // refund surpluss eth, if any
         if (msg.value > amountETH)
-            TransferHelper.safeTransferETH(msg.sender, msg.value - amountETH);
+            msg.sender.safeTransferETH(msg.value - amountETH);
     }
 
     /*** Leverage LP Token ***/
@@ -377,13 +371,11 @@ contract Router is IRouter, IImpermaxCallee {
         ) = getLendingPool(underlying);
         address uniswapV2Pair = getUniswapV2Pair(underlying);
         // add liquidity to uniswap pair
-        TransferHelper.safeTransfer(
-            IBorrowable(borrowableA).underlying(),
+        IBorrowable(borrowableA).underlying().safeTransfer(
             uniswapV2Pair,
             amountA
         );
-        TransferHelper.safeTransfer(
-            IBorrowable(borrowableB).underlying(),
+        IBorrowable(borrowableB).underlying().safeTransfer(
             uniswapV2Pair,
             amountB
         );
@@ -489,15 +481,15 @@ contract Router is IRouter, IImpermaxCallee {
     ) internal virtual {
         //repay
         uint amount = _repayAmount(borrowable, amountMax, borrower);
-        TransferHelper.safeTransfer(token, borrowable, amount);
+        token.safeTransfer(borrowable, amount);
         IBorrowable(borrowable).borrow(borrower, address(0), 0, new bytes(0));
         // refund excess
         if (amountMax > amount) {
             uint refundAmount = amountMax - amount;
             if (token == WETH) {
                 IWETH(WETH).withdraw(refundAmount);
-                TransferHelper.safeTransferETH(borrower, refundAmount);
-            } else TransferHelper.safeTransfer(token, borrower, refundAmount);
+                borrower.safeTransferETH(refundAmount);
+            } else token.safeTransfer(borrower, refundAmount);
         }
     }
 
