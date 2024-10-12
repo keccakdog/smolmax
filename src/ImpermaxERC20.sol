@@ -1,9 +1,8 @@
+// SPDX-License-Identifier: MIT
 pragma solidity 0.8.13;
 
-import "./libraries/Errors.sol";
-
-// This contract is basically UniswapV2ERC20 with small modifications
-// src: https://github.com/Uniswap/uniswap-v2-core/blob/master/contracts/UniswapV2ERC20.sol
+import {IERC20} from "@openzeppelin/token/ERC20/IERC20.sol";
+import {_require, Errors} from "./libraries/Errors.sol";
 
 contract ImpermaxERC20 {
     string public name;
@@ -67,7 +66,7 @@ contract ImpermaxERC20 {
         return true;
     }
 
-    function transfer(address to, uint value) external returns (bool) {
+    function transfer(address to, uint value) external override returns (bool) {
         _transfer(msg.sender, to, value);
         return true;
     }
@@ -144,4 +143,3 @@ contract ImpermaxERC20 {
         _approve(owner, spender, value);
     }
 }
-

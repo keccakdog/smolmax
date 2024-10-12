@@ -2,38 +2,46 @@
 pragma solidity 0.8.13;
 
 import {SafeTransferLib} from "solady/src/utils/SafeTransferLib.sol";
-import "./interfaces/IRouter.sol";
-import "./interfaces/IPoolToken.sol";
-import "./interfaces/IBorrowable.sol";
-import "./interfaces/IFactory.sol";
-import "./interfaces/ICollateral.sol";
-import "./interfaces/IImpermaxCallee.sol";
-import "./interfaces/IERC20.sol";
-import "./interfaces/IVault.sol";
-import "./interfaces/IWETH.sol";
-import "./interfaces/IUniswapV2Pair.sol";
-import "./libraries/UniswapV2Library.sol";
+import {IRouter} from "./interfaces/IRouter.sol";
+import {IPoolToken} from "./interfaces/IPoolToken.sol";
+import {IBorrowable} from "./interfaces/IBorrowable.sol";
+import {IFactory} from "./interfaces/IFactory.sol";
+import {ICollateral} from "./interfaces/ICollateral.sol";
+import {IImpermaxCallee} from "./interfaces/IImpermaxCallee.sol";
+import {IERC20} from "./interfaces/IERC20.sol";
+import {IVault} from "./interfaces/IVault.sol";
+import {IWETH} from "./interfaces/IWETH.sol";
+import {IUniswapV2Pair} from "./interfaces/IUniswapV2Pair.sol";
+import {_require, Errors} from "./libraries/Errors.sol";
+import {UniswapV2Library} from "./libraries/UniswapV2Library.sol";
+
+/// @title Limestone Router
+/// @author Chainvisions, forked from Impermax
+/// @notice Peripheral contract used to interact with the lending pool.
 
 contract Router is IRouter, IImpermaxCallee {
     using SafeTransferLib for address;
 
+    /// @notice Lending pool factory contract.
     address public immutable override factory;
+
+    /// @notice WETH contract.
     address public immutable override WETH;
 
     modifier ensure(uint deadline) {
-        require(deadline >= block.timestamp, "ImpermaxRouter: EXPIRED");
+        _require(deadline >= block.timestamp, Errors.EXPIRED);
         _;
     }
 
     modifier checkETH(address poolToken) {
-        require(
-            WETH == IPoolToken(poolToken).underlying(),
-            "ImpermaxRouter: NOT_WETH"
-        );
+        _require(WETH == IPoolToken(poolToken).underlying(), Errors.NOT_WETH);
         _;
     }
 
-    constructor(address _factory, address _WETH) public {
+    /// @notice Router constructor.
+    /// @param _factory Lending pool factory contract.
+    /// @param _WETH WETH token contract.
+    constructor(address _factory, address _WETH) {
         factory = _factory;
         WETH = _WETH;
     }
@@ -98,10 +106,10 @@ contract Router is IRouter, IImpermaxCallee {
     ) external virtual override ensure(deadline) returns (uint tokens) {
         address underlying = IPoolToken(poolToken).underlying();
         if (isStakedLPToken(underlying)) {
-            address uniswapV2Pair = IStakedLPToken01(underlying).underlying();
+            address uniswapV2Pair = IVault(underlying).underlying();
             _permit(uniswapV2Pair, amount, deadline, permitData);
             uniswapV2Pair.safeTransferFrom(msg.sender, underlying, amount);
-            IStakedLPToken01(underlying).mint(poolToken);
+            IVault(underlying).mint(poolToken);
             return IPoolToken(poolToken).mint(to);
         } else {
             _permit(underlying, amount, deadline, permitData);
@@ -125,7 +133,7 @@ contract Router is IRouter, IImpermaxCallee {
         address underlying = IPoolToken(poolToken).underlying();
         if (isStakedLPToken(underlying)) {
             IPoolToken(poolToken).redeem(underlying);
-            return IStakedLPToken01(underlying).redeem(to);
+            return IVault(underlying).redeem(to);
         } else {
             return IPoolToken(poolToken).redeem(to);
         }
@@ -151,7 +159,7 @@ contract Router is IRouter, IImpermaxCallee {
         IPoolToken(poolToken).transferFrom(msg.sender, poolToken, tokens);
         amountETH = IPoolToken(poolToken).redeem(address(this));
         IWETH(WETH).withdraw(amountETH);
-        TransferHelper.safeTransferETH(to, amountETH);
+        to.safeTransferETH(amountETH);
     }
 
     /*** Borrow ***/
@@ -450,7 +458,7 @@ contract Router is IRouter, IImpermaxCallee {
         IUniswapV2Pair(underlying).transfer(underlying, redeemAmount);
         //TransferHelper.safeTransfer(underlying, underlying, redeemAmount);
         if (isStakedLPToken(underlying))
-            IStakedLPToken01(underlying).redeem(uniswapV2Pair);
+            IVault(underlying).redeem(uniswapV2Pair);
         (uint amountAMax, uint amountBMax) = IUniswapV2Pair(uniswapV2Pair).burn(
             address(this)
         );
@@ -686,9 +694,7 @@ contract Router is IRouter, IImpermaxCallee {
     function isStakedLPToken(
         address underlying
     ) public view virtual override returns (bool) {
-        try IStakedLPToken01(underlying).isStakedLPToken() returns (
-            bool result
-        ) {
+        try IVault(underlying).isStakedLPToken() returns (bool result) {
             return result;
         } catch {
             return false;
@@ -698,7 +704,7 @@ contract Router is IRouter, IImpermaxCallee {
     function getUniswapV2Pair(
         address underlying
     ) public view virtual override returns (address) {
-        try IStakedLPToken01(underlying).underlying() returns (address u) {
+        try IVault(underlying).underlying() returns (address u) {
             if (u != address(0)) return u;
             return underlying;
         } catch {

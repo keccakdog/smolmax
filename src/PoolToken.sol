@@ -1,18 +1,19 @@
+// SPDX-License-Identifier: MIT
 pragma solidity 0.8.13;
 
-import "./ImpermaxERC20.sol";
-import "./interfaces/IERC20.sol";
-import "./interfaces/IPoolToken.sol";
-import "./libraries/SafeMath.sol";
-import "./libraries/Errors.sol";
+import {ReentrancyGuard} from "solady/src/utils/ReentrancyGuard.sol";
+import {IERC20} from "./interfaces/IERC20.sol";
+import {IPoolToken} from "./interfaces/IPoolToken.sol";
+import {_require, Errors} from "./libraries/Errors.sol";
+import {ImpermaxERC20} from "./ImpermaxERC20.sol";
 
 // TODO: Inherit IPoolToken
-contract PoolToken is ImpermaxERC20 {
+contract PoolToken is IPoolToken, ImpermaxERC20, ReentrancyGuard {
     uint internal constant initialExchangeRate = 1e18;
-    address public underlying;
-    address public factory;
-    uint public totalBalance;
-    uint public constant MINIMUM_LIQUIDITY = 1000;
+    address public override underlying;
+    address public override factory;
+    uint public override totalBalance;
+    uint public constant override MINIMUM_LIQUIDITY = 1000;
 
     event Mint(
         address indexed sender,
@@ -31,7 +32,7 @@ contract PoolToken is ImpermaxERC20 {
     /*** Initialize ***/
 
     // called once by the factory
-    function _setFactory() external {
+    function _setFactory() external override {
         _require(factory == address(0), Errors.FACTORY_ALREADY_SET);
         factory = msg.sender;
     }
@@ -43,17 +44,20 @@ contract PoolToken is ImpermaxERC20 {
         emit Sync(totalBalance);
     }
 
-    function exchangeRate() public returns (uint) {
+    function exchangeRate() public override returns (uint) {
         uint _totalSupply = totalSupply; // gas savings
         uint _totalBalance = totalBalance; // gas savings
         if (_totalSupply == 0 || _totalBalance == 0) return initialExchangeRate;
         return (_totalBalance * 1e18) / _totalSupply;
     }
 
-    // this low-level function should be called from another contract
+    /// @notice Mints new pool tokens using `underlying` tokens.
+    /// @dev This is a low level function that is ideally called via the periphery contracts.
+    /// @param _minter Address to mint tokens to.
+    /// @return mintTokens Amount of tokens minted.
     function mint(
-        address minter
-    ) external nonReentrant update returns (uint mintTokens) {
+        address _minter
+    ) external override nonReentrant update returns (uint mintTokens) {
         uint balance = IERC20(underlying).balanceOf(address(this));
         uint mintAmount = balance - totalBalance;
         mintTokens = (mintAmount * 1e18) / exchangeRate();
@@ -64,38 +68,39 @@ contract PoolToken is ImpermaxERC20 {
             _mint(address(0), MINIMUM_LIQUIDITY);
         }
         _require(mintTokens > 0, Errors.MINT_AMOUNT_ZERO);
-        _mint(minter, mintTokens);
-        emit Mint(msg.sender, minter, mintAmount, mintTokens);
+        _mint(_minter, mintTokens);
+        emit Mint(msg.sender, _minter, mintAmount, mintTokens);
     }
 
-    // this low-level function should be called from another contract
+    /// @notice Redeems the pool token for the underlying asset held.
+    /// @dev This is a low level function that is ideally called via the periphery contracts.
+    /// @param _redeemer Address to send redeemed tokens to.
+    /// @return redeemAmount Amount of `underlying` redeemed.
     function redeem(
-        address redeemer
-    ) external nonReentrant update returns (uint redeemAmount) {
+        address _redeemer
+    ) external override nonReentrant update returns (uint redeemAmount) {
         uint redeemTokens = balanceOf[address(this)];
         redeemAmount = (redeemTokens * exchangeRate()) / 1e18;
 
         _require(redeemAmount > 0, Errors.REDEEM_AMOUNT_ZERO);
         _require(redeemAmount <= totalBalance, Errors.INSUFFICIENT_CASH);
         _burn(address(this), redeemTokens);
-        _safeTransfer(redeemer, redeemAmount);
-        emit Redeem(msg.sender, redeemer, redeemAmount, redeemTokens);
+        _safeTransfer(_redeemer, redeemAmount);
+        emit Redeem(msg.sender, _redeemer, redeemAmount, redeemTokens);
     }
 
-    // force real balance to match totalBalance
-    function skim(address to) external nonReentrant {
+    /// @notice Skims off extra held tokens that are not accounted for.
+    /// @param _to Address to send skimmed tokens to.
+    function skim(address _to) external override nonReentrant {
         _safeTransfer(
-            to,
+            _to,
             IERC20(underlying).balanceOf(address(this)) - totalBalance
         );
     }
 
-    // force totalBalance to match real balance
+    /// @notice Assimilates extra held tokens into the pool's `totalBalance`.
     function sync() external nonReentrant update {}
 
-    /*** Utilities ***/
-
-    // same safe transfer function used by UniSwapV2 (with fixed underlying)
     bytes4 private constant SELECTOR =
         bytes4(keccak256(bytes("transfer(address,uint256)")));
 
@@ -109,19 +114,9 @@ contract PoolToken is ImpermaxERC20 {
         );
     }
 
-    // prevents a contract from calling itself, directly or indirectly.
-    bool internal _notEntered = true;
-    modifier nonReentrant() {
-        _require(_notEntered, Errors.REENTERED);
-        _notEntered = false;
-        _;
-        _notEntered = true;
-    }
-
     // update totalBalance with current balance
     modifier update() {
         _;
         _update();
     }
 }
-
