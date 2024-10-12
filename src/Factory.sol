@@ -41,7 +41,7 @@ contract Factory {
         address collateral,
         address borrowable0,
         address borrowable1,
-        uint lendingPoolId
+        uint256 lendingPoolId
     );
     event NewPendingAdmin(address oldPendingAdmin, address newPendingAdmin);
     event NewAdmin(address oldAdmin, address newAdmin);

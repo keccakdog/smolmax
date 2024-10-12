@@ -36,7 +36,7 @@ contract BSetter is PoolToken, BStorage {
 
     /// @notice Emitted when a new adjustment speed is set.
     /// @param newAdjustSpeed The new adjustment speed.
-    event NewAdjustSpeed(uint newAdjustSpeed);
+    event NewAdjustSpeed(uint256 newAdjustSpeed);
 
     /// @notice Emitted when a new borrow tracker contract is set.
     /// @param newBorrowTracker New borrow tracker contract.
@@ -99,4 +99,3 @@ contract BSetter is PoolToken, BStorage {
         );
     }
 }
-
