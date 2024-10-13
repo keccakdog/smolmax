@@ -16,6 +16,7 @@ import {_require, Errors} from "./libraries/Errors.sol";
 
 // TODO: Inherit IBorrowable
 contract Borrowable is
+    IBorrowable,
     PoolToken,
     BStorage,
     BSetter,
@@ -70,7 +71,7 @@ contract Borrowable is
             return _exchangeRateNew;
         } else return _exchangeRate;
     }
-
+    /// @inheritdoc IBorrowable
     function exchangeRate() public override accrue returns (uint256) {
         uint256 _totalSupply = totalSupply;
         uint256 _actualBalance = totalBalance + totalBorrows;
@@ -79,13 +80,11 @@ contract Borrowable is
         uint256 _exchangeRate = (_actualBalance * 1e18) / _totalSupply;
         return _mintReserves(_exchangeRate, _totalSupply);
     }
-
-    /// @notice forces totalBalance to match real balance
+    /// @inheritdoc IBorrowable
     function sync() external override nonReentrant update accrue {}
 
     /*** Borrowable ***/
-
-    /// @notice this is the stored borrow balance; the current borrow balance may be slightly higher
+    /// @inheritdoc IBorrowable
     function borrowBalance(address borrower) public view returns (uint) {
         BorrowSnapshot memory borrowSnapshot = borrowBalances[borrower];
         if (borrowSnapshot.interestIndex == 0) return 0; // not initialized
@@ -155,7 +154,7 @@ contract Borrowable is
         _trackBorrow(borrower, accountBorrows, _borrowIndex);
     }
 
-    /// @notice this low-level function should be called from another contract
+    /// @inheritdoc IBorrowable
     function borrow(
         address borrower,
         address receiver,
@@ -166,7 +165,7 @@ contract Borrowable is
         _require(borrowAmount <= _totalBalance, Errors.INSUFFICIENT_CASH);
         _checkBorrowAllowance(borrower, msg.sender, borrowAmount);
 
-        // optimistically transfer funds
+        /// @dev optimistically transfer funds
         if (borrowAmount > 0) _safeTransfer(receiver, borrowAmount);
         if (data.length > 0)
             IImpermaxCallee(receiver).impermaxBorrow(
@@ -208,7 +207,7 @@ contract Borrowable is
         );
     }
 
-    /// @notice this low-level function should be called from another contract
+    /// @inheritdoc IBorrowable
     function liquidate(
         address borrower,
         address liquidator
@@ -243,6 +242,7 @@ contract Borrowable is
         );
     }
 
+    /// @inheritdoc IBorrowable
     function trackBorrow(address borrower) external {
         _trackBorrow(borrower, borrowBalance(borrower), borrowIndex);
     }

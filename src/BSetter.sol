@@ -42,14 +42,15 @@ contract BSetter is PoolToken, BStorage {
     /// @param newBorrowTracker New borrow tracker contract.
     event NewBorrowTracker(address newBorrowTracker);
 
-    // called once by the factory at time of deployment
+    /// @notice called once by the factory at time of deployment
     function _initialize(
         string calldata _name,
         string calldata _symbol,
         address _underlying,
         address _collateral
     ) external {
-        _require(msg.sender == factory, Errors.UNAUTHORIZED_CALL); // sufficient check
+        /// @dev sufficient check
+        _require(msg.sender == factory, Errors.UNAUTHORIZED_CALL);
         _setName(_name, _symbol);
         underlying = _underlying;
         collateral = _collateral;
