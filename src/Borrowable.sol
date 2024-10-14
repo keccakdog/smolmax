@@ -85,12 +85,14 @@ contract Borrowable is
 
     /*** Borrowable ***/
     /// @inheritdoc IBorrowable
-    function borrowBalance(address borrower) public view returns (uint) {
+    function borrowBalance(address borrower) public view returns (uint256) {
         BorrowSnapshot memory borrowSnapshot = borrowBalances[borrower];
-        if (borrowSnapshot.interestIndex == 0) return 0; // not initialized
-        return
-            (uint(borrowSnapshot.principal) * borrowIndex) /
-            borrowSnapshot.interestIndex;
+        return (
+            borrowSnapshot.interestIndex == 0
+                ? 0
+                : (uint256(borrowSnapshot.principal) * borrowIndex) /
+                    borrowSnapshot.interestIndex
+        );
     }
 
     function _trackBorrow(
@@ -138,11 +140,9 @@ contract Borrowable is
                 ? accountBorrowsPrior - decreaseAmount
                 : 0;
             borrowSnapshot.principal = safe112(accountBorrows);
-            if (accountBorrows == 0) {
-                borrowSnapshot.interestIndex = 0;
-            } else {
-                borrowSnapshot.interestIndex = _borrowIndex;
-            }
+            borrowSnapshot.interestIndex = accountBorrows == 0
+                ? 0
+                : _borrowIndex;
             uint256 actualDecreaseAmount = accountBorrowsPrior - accountBorrows;
             /// @dev gas savings
             _totalBorrows = totalBorrows;

@@ -18,7 +18,7 @@ import {CSetter} from "./CSetter.sol";
 /// @author Chainvisions, forked from Impermax
 /// @notice Collateral contract for the lending pool.
 
-contract Collateral is PoolToken, CStorage, CSetter {
+contract Collateral is ICollateral, PoolToken, CStorage, CSetter {
     using UQ112x112 for uint224;
 
     /*** Collateralization Model ***/
@@ -61,7 +61,7 @@ contract Collateral is PoolToken, CStorage, CSetter {
         _require(price1 > 100, Errors.PRICE_CALCULATION_ERROR);
     }
 
-    // returns liquidity in  collateral's underlying
+    /// @dev returns liquidity in  collateral's underlying
     function _calculateLiquidity(
         uint256 amountCollateral,
         uint256 amount0,
